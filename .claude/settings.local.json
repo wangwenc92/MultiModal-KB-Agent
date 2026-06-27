@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(HF_ENDPOINT=https://hf-mirror.com /d/Anaconde/envs/kb-agent/python.exe *)",
+      "Bash(python *)",
+      "Bash(pip show *)",
+      "Bash(streamlit run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8501)",
+      "Bash(pkill -f \"streamlit run\")",
+      "Bash(pip install *)",
+      "Bash(ls /c/Python*/python.exe)",
+      "Bash(ls /d/Python*/python.exe)",
+      "Bash(where python *)",
+      "Bash(D:/Anaconde/python.exe -m pip install -r D:/test2/requirements.txt)",
+      "Bash(D:/Anaconde/python.exe -m pip install fastapi uvicorn python-multipart langchain langchain-openai langchain-community langchain-anthropic chromadb pymysql sqlalchemy redis pydantic pydantic-settings python-dotenv loguru httpx tiktoken aiofiles pandas numpy pillow pymupdf python-docx)",
+      "Bash(D:/Anaconde/python.exe scripts/init_db.py)",
+      "Bash(D:/Anaconde/python.exe *)",
+      "Bash(D:/Anaconde/python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(pkill -f \"uvicorn\")",
+      "Bash(curl *)",
+      "Bash(taskkill //F //IM python.exe)",
+       "Bash(git commit:*)"
+    ]
+  }
+}

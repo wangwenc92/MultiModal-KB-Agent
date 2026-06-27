@@ -1,0 +1,24 @@
+多模态智能知识库 Agent 系统 | 独立开发
+
+技术栈：Python · FastAPI · LangChain · ChromaDB · MySQL · Redis · Streamlit · Docker
+
+项目描述：
+基于大语言模型的企业级多模态知识库问答系统，支持文档（PDF/Word/MD/TXT）、图片、音频、视频的自动索引与智能问答，集成 RAG 检索增强生成和 AI Agent 自主任务规划双模式。
+
+核心工作：
+
+- 设计并实现完整 RAG 管线：文档加载（PyMuPDF/python-docx）→ 多策略文本分块（递归/句子/Markdown，含 overlap）→ Embedding 向量化 → ChromaDB 存储与余弦相似度检索 → 上下文构建 → LLM 生成带引用溯源的回答
+
+- 实现 ReAct 模式的 AI Agent 引擎，通过 Thought/Action/Observation 循环自主调度 Web 搜索、计算器、代码执行、文件操作、知识库检索等工具链，支持多步推理与复杂任务拆解
+
+- 构建多模态处理管线：图片端集成 PaddleOCR 文字提取 + Vision 模型内容描述；音频端对接 Whisper API 支持语音转写及大文件分片处理；视频端通过 FFmpeg 关键帧抽取后送入视觉模型分析
+
+- 搭建多层记忆架构：短期记忆管理单次会话上下文，长期记忆支持跨会话知识持久化，上下文窗口管理器动态截断控制 token 用量
+
+- 基于 Redis 实现语义缓存（问题 hash → 回答，TTL 300s）和滑动窗口限流中间件（60 req/min），通过 Pydantic Settings 统一管理多环境配置
+
+- 实现 MCP Server（stdio JSON-RPC 协议），将知识库检索能力以标准化工具接口暴露，支持外部 Agent 生态集成
+
+- 实现 LoRA 微调脚本，支持基于知识库 QA 对对 Qwen2-7B 等开源模型进行轻量微调与权重合并，包含数据格式化、SFTTrainer 训练、模型保存全流程
+
+- FastAPI 提供 RESTful API（对话、知识库管理、文件上传、数据分析），Streamlit 前端实现对话界面与知识库可视化管理，Docker Compose 一键部署全栈服务（MySQL + Redis + Backend + Frontend）
