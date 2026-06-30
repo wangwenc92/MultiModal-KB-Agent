@@ -64,6 +64,7 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = Field(default=None, description="会话ID，为空则创建新会话")
     knowledge_base_id: str = Field(..., description="知识库ID")
     mode: str = Field(default="rag", description="模式: rag 或 agent")
+    max_iterations: int = Field(default=5, ge=1, le=20, description="Agent最大推理步数")
 
 
 class SourceInfo(BaseModel):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import time
@@ -22,33 +23,46 @@ class AgentExecutor:
         tool_lines = [TOOL_LIST_TEMPLATE.format(name=t.name, description=t.description) for t in tools]
         return SYSTEM_PROMPT.format(tools="\n".join(tool_lines))
 
-    def _parse_action(self, text: str) -> tuple[str, str] | None:
-        # 解析 Action 和 Action Input
-        action_match = re.search(r"Action:\s*(.+?)(?:\n|$)", text)
-        input_match = re.search(r"Action Input:\s*(.+?)(?:\n|$)", text, re.DOTALL)
+    def _parse_action(self, text: str) -> tuple[str, str | dict] | None:
+        """解析LLM输出中的 Action 和 Action Input
 
+        Action 只匹配工具名（单个非空白词），避免跨行误匹配。
+        Action Input 支持 JSON、key=value 和纯文本三种格式。
+        """
+        # 只匹配第一个非空白的工具名（不依赖换行符）
+        action_match = re.search(r"Action:\s*(\S+)", text)
         if not action_match:
             return None
 
         action = action_match.group(1).strip()
-        action_input = input_match.group(1).strip() if input_match else ""
 
-        # 尝试解析JSON输入
-        try:
-            action_input = json.loads(action_input)
-        except (json.JSONDecodeError, TypeError):
-            # 如果不是JSON，尝试简单的key=value格式
-            if "=" in action_input:
-                pairs = action_input.split(",")
-                action_input = {}
+        # 匹配 Action Input —— 捕获到文本末尾或下一个 "Action:" / "Thought:"
+        input_match = re.search(
+            r"Action Input:\s*(.+?)(?=\n\s*(?:Action:|Thought:|Final\s*Answer:)|\Z)",
+            text, re.DOTALL
+        )
+
+        action_input_raw = input_match.group(1).strip() if input_match else ""
+
+        # 尝试解析 JSON
+        if action_input_raw.startswith("{"):
+            try:
+                return action, json.loads(action_input_raw)
+            except json.JSONDecodeError:
+                pass
+
+        # 尝试 key=value 格式
+        if "=" in action_input_raw:
+            pairs = [p.strip() for p in action_input_raw.split(",") if "=" in p]
+            if pairs:
+                parsed = {}
                 for pair in pairs:
                     k, _, v = pair.partition("=")
-                    action_input[k.strip()] = v.strip()
-            else:
-                # 作为单个参数
-                action_input = {"query": action_input} if action_input else {}
+                    parsed[k.strip()] = v.strip()
+                return action, parsed
 
-        return action, action_input
+        # 纯文本作为 query 参数
+        return action, {"query": action_input_raw} if action_input_raw else {}
 
     def _execute_tool(self, tool_name: str, tool_input: dict) -> str:
         tool = TOOL_REGISTRY.get(tool_name)
@@ -65,6 +79,7 @@ class AgentExecutor:
             return f"工具执行错误: {str(e)}"
 
     def run(self, question: str, tool_names: list[str] | None = None, context: str = "") -> dict:
+        """同步执行 Agent 推理循环"""
         system_prompt = self._build_system_prompt(tool_names)
         trace = []
         messages = []
@@ -79,7 +94,7 @@ class AgentExecutor:
 
             # 调用LLM
             response = self.llm.chat(system_prompt, user_msg)
-            thought_match = re.search(r"Thought:\s*(.+?)(?:\n|$)", response)
+            thought_match = re.search(r"Thought:\s*(.+?)(?=\n|$)", response)
             thought = thought_match.group(1).strip() if thought_match else response[:200]
 
             trace.append({
@@ -119,12 +134,16 @@ class AgentExecutor:
         trace.append({"step": len(trace) + 1, "type": "forced_final", "thought": "达到最大迭代次数"})
         return {"answer": final_answer, "trace": trace}
 
+    async def arun(self, question: str, tool_names: list[str] | None = None, context: str = "") -> dict:
+        """异步执行 Agent 推理循环（通过线程池避免阻塞事件循环）"""
+        return await asyncio.to_thread(self.run, question, tool_names, context)
+
 
 _agent_executor: AgentExecutor | None = None
 
 
-def get_agent_executor() -> AgentExecutor:
+def get_agent_executor(max_iterations: int = 5) -> AgentExecutor:
     global _agent_executor
-    if _agent_executor is None:
-        _agent_executor = AgentExecutor()
+    if _agent_executor is None or _agent_executor.max_iterations != max_iterations:
+        _agent_executor = AgentExecutor(max_iterations=max_iterations)
     return _agent_executor

@@ -82,3 +82,14 @@ class MessageModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     session = relationship("SessionModel", back_populates="messages")
+
+
+class MemoryEntryModel(Base):
+    """长期记忆表：用户偏好、重要事实、对话摘要"""
+    __tablename__ = "memory_entries"
+
+    id = Column(String(32), primary_key=True)
+    user_id = Column(String(64), nullable=False, index=True)
+    type = Column(String(50), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

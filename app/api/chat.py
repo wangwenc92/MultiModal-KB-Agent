@@ -46,10 +46,10 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db)):
     sources = []
 
     if req.mode == "agent":
-        # Agent模式
+        # Agent模式 —— 异步执行，不阻塞事件循环
         context = ctx.build_context(req.question, session.id, req.knowledge_base_id)
-        agent = get_agent_executor()
-        result = agent.run(req.question, context=context)
+        agent = get_agent_executor(max_iterations=req.max_iterations)
+        result = await agent.arun(req.question, context=context)
         answer = result["answer"]
         agent_trace = result.get("trace", [])
     else:
