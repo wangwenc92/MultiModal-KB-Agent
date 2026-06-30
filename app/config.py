@@ -3,15 +3,15 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    # LLM
+    # LLM（阿里云DashScope，OpenAI兼容接口）
     LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = "https://api.anthropic.com"
-    LLM_MODEL: str = "claude-sonnet-4-20250514"
+    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    LLM_MODEL: str = "qwen-plus"
 
-    # Embedding
+    # Embedding（阿里云DashScope）
     EMBEDDING_API_KEY: str = ""
-    EMBEDDING_BASE_URL: str = "https://api.openai.com/v1"
-    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    EMBEDDING_MODEL: str = "text-embedding-v3"
 
     # MySQL
     MYSQL_URL: str = "mysql+pymysql://root:password@localhost:3306/multimodal_kb"
