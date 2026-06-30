@@ -1,43 +1,4 @@
-# === Web框架 ===
-fastapi>=0.100.0
-uvicorn[standard]>=0.23.0
-python-multipart>=0.0.6
 streamlit>=1.30.0
-
-# === LangChain生态 ===
-langchain>=0.2.0
-langchain-openai>=0.1.0
-
-# === 向量数据库 ===
-chromadb>=0.4.0
-
-# === 数据库 ===
-pymysql>=1.1.0
-sqlalchemy>=2.0.0
-redis>=5.0.0
-
-# === 多模态处理 ===
-openai-whisper>=20231117
-Pillow>=10.0.0
-paddleocr>=2.7.0
-paddlepaddle>=2.5.0
-ffmpeg-python>=0.2.0
-pymupdf>=1.23.0
-python-docx>=1.0.0
-
-# === OpenAI兼容接口 ===
-openai>=1.0.0
-
-# === 数据处理 ===
+requests>=2.31.0
+plotly>=5.18.0
 pandas>=2.1.0
-numpy>=1.25.0
-
-# === 工具库 ===
-pydantic>=2.5.0
-pydantic-settings>=2.1.0
-python-dotenv>=1.0.0
-loguru>=0.7.0
-httpx>=0.25.0
-tiktoken>=0.5.0
-aiofiles>=23.0.0
-duckduckgo_search>=8.0.0
