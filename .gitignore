@@ -34,3 +34,14 @@ Thumbs.db
 
 # Docker
 docker/.env
+
+# Temporary test files
+img2*.png
+img2_*.txt
+img2_*.json
+screenshot*.png
+mcp.json
+mcp_result.json
+result_*.txt
+upload_temp/
+workspace/
