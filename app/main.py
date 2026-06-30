@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.utils.logger import log
-from app.utils.exceptions import AppException, app_exception_handler, generic_exception_handler
+from app.utils.exceptions import generic_exception_handler
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.logging import LoggingMiddleware
 from app.api import chat, knowledge, upload, admin, analytics
@@ -27,7 +27,6 @@ app.add_middleware(
 )
 
 # 异常处理
-app.add_exception_handler(AppException, app_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 
 # 注册路由

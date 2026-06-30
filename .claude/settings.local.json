@@ -20,7 +20,8 @@
       "Bash(pkill -f \"uvicorn\")",
       "Bash(curl *)",
       "Bash(taskkill //F //IM python.exe)",
-       "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(python scripts/mcp_qwen_vision.py)"
     ]
   }
 }

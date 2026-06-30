@@ -47,16 +47,6 @@ class ContextManager:
         log.info(f"Built context: {len(context)} chars")
         return context
 
-    def extract_memory(self, session_id: str, user_id: str = "default"):
-        """从对话历史中提取值得记住的信息（简化实现）"""
-        history = self.short_term.get_history(session_id)
-        if len(history) >= 4:
-            # 保留最后几轮对话的摘要
-            recent = history[-4:]
-            summary = " | ".join(m["content"][:50] for m in recent)
-            self.long_term.save_memory(user_id, "conversation", summary)
-
-
 _context_manager: ContextManager | None = None
 
 

@@ -15,11 +15,30 @@ IMAGE_DESCRIBE_PROMPT = """请详细描述这张图片的内容。要求：
 
 
 class ImageProcessor:
-    """图片处理：OCR文字提取 + AI内容描述"""
+    """图片处理：OCR文字提取 + 千问视觉模型AI描述"""
 
     def __init__(self):
         self.ocr = get_ocr_engine()
         self.llm = get_llm_service()
+        self._vision_llm = None
+
+    @property
+    def vision_llm(self):
+        """延迟初始化的千问视觉模型（qwen-vl-max）"""
+        if self._vision_llm is None:
+            from langchain_openai import ChatOpenAI
+            from app.config import get_settings
+            s = get_settings()
+            self._vision_llm = ChatOpenAI(
+                model=s.QWEN_MODEL,
+                openai_api_key=s.QWEN_API_KEY,
+                base_url=s.QWEN_BASE_URL,
+                max_tokens=s.QWEN_MAX_TOKENS,
+                temperature=s.QWEN_TEMPERATURE,
+                timeout=60,
+                max_retries=2,
+            )
+        return self._vision_llm
 
     def process(self, image_path: str) -> dict:
         """
@@ -69,9 +88,9 @@ class ImageProcessor:
         }
 
     def _describe_with_llm(self, image_path: str) -> str:
-        """使用视觉模型描述图片"""
+        """使用千问视觉模型（qwen-vl-max）描述图片内容"""
         import base64
-        from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_core.messages import HumanMessage
 
         with open(image_path, "rb") as f:
             image_data = base64.b64encode(f.read()).decode("utf-8")
@@ -89,8 +108,7 @@ class ImageProcessor:
             ]
         )
 
-        llm = self.llm.llm
-        resp = llm.invoke([message])
+        resp = self.vision_llm.invoke([message])
         return resp.content
 
 

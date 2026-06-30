@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     # API Auth
     API_KEY: str = ""
 
+    # 千问视觉模型（图片识别）
+    QWEN_API_KEY: str = ""
+    QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    QWEN_MODEL: str = "qwen-vl-max"
+    QWEN_MAX_TOKENS: int = 2048
+    QWEN_TEMPERATURE: float = 0.1
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
