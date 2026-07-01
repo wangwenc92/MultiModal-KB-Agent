@@ -22,6 +22,7 @@ class RAGChain:
         self.retriever = get_retriever()
         self.llm = get_llm_service()
         self.cache = get_cache()
+        self.last_sources: list[dict] = []
 
     def _build_context(self, results: list[dict]) -> str:
         parts = []
@@ -45,6 +46,14 @@ class RAGChain:
         context = self._build_context(results)
         answer = self.llm.chat(RAG_SYSTEM_PROMPT, question, context)
 
+        sources = self._build_sources(results)
+
+        log.info(f"RAG answer generated with {len(sources)} sources")
+        result = {"answer": answer, "sources": sources}
+        self.cache.set_json(cache_key, result, ttl=300)
+        return result
+
+    def _build_sources(self, results: list[dict]) -> list[dict]:
         sources = []
         for r in results:
             meta = r.get("metadata", {})
@@ -54,15 +63,12 @@ class RAGChain:
                 "page": meta.get("page"),
                 "score": round(r["score"], 3),
             })
-
-        log.info(f"RAG answer generated with {len(sources)} sources")
-        result = {"answer": answer, "sources": sources}
-        self.cache.set_json(cache_key, result, ttl=300)
-        return result
+        return sources
 
     async def ask_stream(self, question: str, kb_id: str) -> AsyncGenerator[str, None]:
         results = self.retriever.retrieve(question, kb_id=kb_id)
         context = self._build_context(results)
+        self.last_sources = self._build_sources(results)
         async for chunk in self.llm.chat_stream(RAG_SYSTEM_PROMPT, question, context):
             yield chunk
 

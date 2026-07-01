@@ -4,7 +4,7 @@ import asyncio
 import json
 import re
 import time
-from typing import Optional
+from typing import AsyncGenerator, Optional
 from app.core.agent.tools import get_tools, TOOL_REGISTRY
 from app.core.agent.prompt import SYSTEM_PROMPT, TOOL_LIST_TEMPLATE, FINAL_ANSWER_TEMPLATE
 from app.services.llm_service import get_llm_service
@@ -138,6 +138,61 @@ class AgentExecutor:
         """异步执行 Agent 推理循环（通过线程池避免阻塞事件循环）"""
         return await asyncio.to_thread(self.run, question, tool_names, context)
 
+    async def stream_run(self, question: str, tool_names: list[str] | None = None,
+                         context: str = "") -> AsyncGenerator[dict, None]:
+        """流式 Agent 执行：逐步产出事件，最终流式输出回答"""
+        system_prompt = self._build_system_prompt(tool_names)
+        trace = []
+
+        user_msg = f"参考资料:\n{context}\n\n用户问题: {question}" if context else question
+
+        for step in range(self.max_iterations):
+            log.info(f"Agent stream step {step + 1}/{self.max_iterations}")
+
+            # 调用LLM
+            response = await asyncio.to_thread(self.llm.chat, system_prompt, user_msg)
+            thought_match = re.search(r"Thought:\s*(.+?)(?=\n|$)", response)
+            thought = thought_match.group(1).strip() if thought_match else response[:200]
+
+            yield {"type": "thought", "content": thought, "step": step + 1}
+
+            # 检查是否有Action
+            parsed = self._parse_action(response)
+            if not parsed:
+                trace.append({"step": step + 1, "type": "final_answer", "thought": thought})
+                # 分块输出最终回答
+                async for chunk in _chunk_text(response):
+                    yield {"type": "chunk", "content": chunk}
+                yield {"type": "done", "trace": trace}
+                return
+
+            action, action_input = parsed
+            yield {"type": "tool_call", "name": action, "input": action_input, "step": step + 1}
+            trace.append({"step": step + 1, "type": "tool_call", "action": action, "action_input": action_input, "thought": thought})
+
+            # 执行工具
+            observation = await asyncio.to_thread(self._execute_tool, action, action_input)
+            yield {"type": "tool_result", "name": action, "content": observation[:500]}
+            trace[-1]["observation"] = observation
+
+            user_msg = f"{response}\n\nObservation: {observation}\n\n请继续思考或给出最终回答。"
+
+        # 超过最大迭代次数
+        trace.append({"step": len(trace) + 1, "type": "forced_final", "thought": "达到最大迭代次数"})
+        yield {"type": "thought", "content": "达到最大迭代次数，正在生成最终回答...", "step": self.max_iterations + 1}
+
+        final_prompt = FINAL_ANSWER_TEMPLATE.format(
+            question=question,
+            observations="\n".join(
+                f"步骤{i+1}: {t.get('action', '')} -> {t.get('observation', '')}"
+                for i, t in enumerate(trace) if t.get("observation")
+            ),
+        )
+        final_answer = await asyncio.to_thread(self.llm.chat, "请直接给出最终回答。", final_prompt)
+        async for chunk in _chunk_text(final_answer):
+            yield {"type": "chunk", "content": chunk}
+        yield {"type": "done", "trace": trace}
+
 
 _agent_executor: AgentExecutor | None = None
 
@@ -147,3 +202,22 @@ def get_agent_executor(max_iterations: int = 5) -> AgentExecutor:
     if _agent_executor is None or _agent_executor.max_iterations != max_iterations:
         _agent_executor = AgentExecutor(max_iterations=max_iterations)
     return _agent_executor
+
+
+async def _chunk_text(text: str, chunk_size: int = 5) -> AsyncGenerator[str, None]:
+    """将文本分块输出，模拟流式效果。每块约 chunk_size 个字。"""
+    import unicodedata
+
+    i = 0
+    while i < len(text):
+        # 按标点符号或长度切分
+        end = min(i + chunk_size, len(text))
+        # 尽量在标点处切分
+        for sep in "。！？，、；：.!?,\n":
+            pos = text.find(sep, i + 1)
+            if 0 < pos < end:
+                end = pos + 1
+                break
+        yield text[i:end]
+        i = end
+        await asyncio.sleep(0.01)  # 稍微减速，让前端有逐字效果

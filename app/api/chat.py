@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.models.database import get_db, SessionModel, MessageModel
 from app.models.schemas import ChatRequest, ChatResponse, SourceInfo, SessionOut, MessageOut
@@ -82,6 +84,85 @@ async def send_message(req: ChatRequest, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/stream")
+async def chat_stream(req: ChatRequest, db: Session = Depends(get_db)):
+    """流式对话接口（SSE）。逐块返回完整回答，用户逐字看到内容。"""
+    session = _get_or_create_session(db, req.session_id, req.question)
+
+    # 保存用户消息
+    user_msg = MessageModel(
+        id=generate_id(), session_id=session.id, role="user", content=req.question,
+    )
+    db.add(user_msg)
+    db.commit()
+
+    ctx = get_context_manager()
+    ctx.add_message(session.id, "user", req.question)
+
+    async def event_generator():
+        full_answer = ""
+        sources_data = []
+        agent_trace_data = None
+
+        try:
+            if req.mode == "agent":
+                # Agent模式：先出中间状态事件，再流式输出最终回答
+                context = ctx.build_context(req.question, session.id, req.knowledge_base_id)
+                agent = get_agent_executor(max_iterations=req.max_iterations)
+
+                async for event in agent.stream_run(req.question, context=context):
+                    if event["type"] == "thought":
+                        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    elif event["type"] == "tool_call":
+                        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    elif event["type"] == "tool_result":
+                        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    elif event["type"] == "chunk":
+                        full_answer += event["content"]
+                        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    elif event["type"] == "done":
+                        agent_trace_data = event.get("trace", [])
+            else:
+                # RAG模式：直接流式输出
+                rag = get_rag_chain()
+                async for chunk in rag.ask_stream(req.question, req.knowledge_base_id):
+                    full_answer += chunk
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+                sources_data = rag.last_sources if hasattr(rag, "last_sources") else []
+
+        except Exception as e:
+            log.error(f"Stream error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
+            return
+
+        # 保存AI回答
+        ctx.add_message(session.id, "assistant", full_answer)
+        try:
+            ai_msg = MessageModel(
+                id=generate_id(),
+                session_id=session.id,
+                role="assistant",
+                content=full_answer,
+                sources=sources_data if sources_data else None,
+                agent_trace=agent_trace_data,
+            )
+            db.add(ai_msg)
+            db.commit()
+        except Exception as e:
+            log.error(f"Failed to save streaming message: {e}")
+
+        # 结束事件
+        done_event = {
+            "type": "done",
+            "session_id": session.id,
+            "sources": sources_data,
+            "agent_trace": agent_trace_data,
+        }
+        yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @router.get("/tools")
 async def list_tools():
     return get_tool_descriptions()
@@ -116,3 +197,4 @@ async def delete_session(session_id: str, db: Session = Depends(get_db)):
     db.delete(session)
     db.commit()
     return {"code": 200, "message": "Session deleted"}
+
