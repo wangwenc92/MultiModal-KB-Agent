@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import json
 import os
 
 API_BASE = os.getenv("API_BASE", "http://localhost:8000")
@@ -636,35 +637,84 @@ else:
             st.markdown(question)
 
         with st.chat_message("assistant"):
-            with st.spinner("🧠 正在思考..."):
-                result = api_post(
-                    "/api/chat/send",
-                    {
+            text_placeholder = st.empty()
+            status_placeholder = st.empty()
+            answer_text = ""
+            sources_data = []
+            agent_trace_data = []
+            current_step_text = ""
+
+            try:
+                resp = requests.post(
+                    f"{API_BASE}/api/chat/stream",
+                    json={
                         "question": question,
                         "session_id": st.session_state.session_id,
                         "knowledge_base_id": st.session_state.current_kb,
                         "mode": st.session_state.mode,
                     },
+                    stream=True,
                     timeout=300,
                 )
-                if result:
-                    st.markdown(result["answer"])
-                    st.session_state.session_id = result["session_id"]
-                    if result.get("sources"):
-                        with st.expander(f"📎 引用来源 ({len(result['sources'])})"):
-                            render_sources(result["sources"])
-                    if result.get("agent_trace"):
-                        with st.expander(f"🔍 Agent 执行轨迹 ({len(result['agent_trace'])} 步)"):
-                            render_agent_trace(result["agent_trace"])
-                    st.session_state.messages.append(
-                        {
-                            "role": "assistant",
-                            "content": result["answer"],
-                            "sources": result.get("sources", []),
-                            "agent_trace": result.get("agent_trace"),
-                        }
-                    )
-                else:
+
+                for raw_line in resp.iter_lines():
+                    if not raw_line:
+                        continue
+                    line = raw_line.decode("utf-8")
+                    if not line.startswith("data: "):
+                        continue
+
+                    event = json.loads(line[6:])
+                    etype = event.get("type")
+
+                    if etype == "chunk":
+                        answer_text += event["content"]
+                        text_placeholder.markdown(answer_text + "▌")
+
+                    elif etype == "thought":
+                        current_step_text = f"💭 {event['content']}"
+                        status_placeholder.caption(current_step_text)
+
+                    elif etype == "tool_call":
+                        current_step_text = f"🔧 调用: {event['name']}"
+                        status_placeholder.caption(current_step_text)
+
+                    elif etype == "tool_result":
+                        content_preview = event.get("content", "")[:80]
+                        current_step_text = f"📤 {event['name']} → {content_preview}..."
+                        status_placeholder.caption(current_step_text)
+
+                    elif etype == "done":
+                        text_placeholder.markdown(answer_text)
+                        status_placeholder.empty()
+                        st.session_state.session_id = event.get("session_id", st.session_state.session_id)
+                        sources_data = event.get("sources", [])
+                        agent_trace_data = event.get("agent_trace", [])
+                        break
+
+                    elif etype == "error":
+                        text_placeholder.markdown(f"❌ 错误: {event['content']}")
+                        break
+
+            except Exception as e:
+                text_placeholder.markdown(f"❌ 请求失败: {e}")
+
+            # 显示引用来源
+            if sources_data:
+                with st.expander(f"📎 引用来源 ({len(sources_data)})"):
+                    render_sources(sources_data)
+            # 显示 Agent 轨迹
+            if agent_trace_data:
+                with st.expander(f"🔍 Agent 执行轨迹 ({len(agent_trace_data)} 步)"):
+                    render_agent_trace(agent_trace_data)
+
+            # 存到会话历史
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": answer_text,
+                "sources": sources_data,
+                "agent_trace": agent_trace_data,
+            })
                     st.markdown(
                         """<div style="background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.3);
                             border-radius:10px;padding:1rem;color:#F85149;">

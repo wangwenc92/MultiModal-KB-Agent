@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import os
 
-API_BASE = os.getenv("API_BASE", "http://localhost:8000")
+API_BASE = os.getenv("API_BASE", "http://localhost:8001")
 
 st.set_page_config(page_title="数据分析看板", page_icon="📊", layout="wide")
 
