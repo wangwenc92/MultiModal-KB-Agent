@@ -92,11 +92,17 @@ class TestFileOps:
 
     def test_list_dir(self, tmp_path):
         import os
-        os.chdir(tmp_path)
-        (tmp_path / "a.txt").write_text("a")
-        (tmp_path / "b.txt").write_text("b")
         from app.core.agent.tools.file_ops import FileOpsTool
-        tool = FileOpsTool()
-        result = tool.invoke({"operation": "list", "path": "."})
-        assert "a.txt" in result
-        assert "b.txt" in result
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            ws = tmp_path / "workspace"
+            ws.mkdir(exist_ok=True)
+            (ws / "a.txt").write_text("a")
+            (ws / "b.txt").write_text("b")
+            tool = FileOpsTool()
+            result = tool.invoke({"operation": "list", "path": "."})
+            assert "a.txt" in result, f"result: {result}"
+            assert "b.txt" in result, f"result: {result}"
+        finally:
+            os.chdir(old_cwd)
